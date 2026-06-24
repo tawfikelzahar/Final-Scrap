@@ -304,9 +304,33 @@ async function fetchTabByName(sheetId, tabName){
   const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
   const data = JSON.parse(jsonStr);
   if(!data.table || !data.table.cols) return { headers: [], rows: [] };
+  return extractHeadersAndRows(data);
+}
 
-  const headers = data.table.cols.map((c,i) => (c.label && c.label.trim()) || (c.id) || `col_${i}`);
-  const rows = (data.table.rows || []).map(r => {
+/* Shared gviz-table -> {headers, rows} extraction, with a critical fallback:
+   when Google Sheets considers the first row "data" rather than a formal
+   header (common when a sheet has merged/filter cells above the real table,
+   or the header row uses formulas), gviz returns EMPTY col.label values and
+   only gives generic col.id letters (A, B, C...). In that case we rebuild
+   real headers from the first data row's formatted values instead, and drop
+   that row from the data so it isn't double-counted. */
+function extractHeadersAndRows(data){
+  const cols = data.table.cols;
+  const allLabelsEmpty = cols.every(c => !c.label || !c.label.trim());
+  let headers, dataRows = data.table.rows || [];
+
+  if(allLabelsEmpty && dataRows.length){
+    // Use the first row's cell values as the real header names instead.
+    headers = dataRows[0].c.map((cell,i) => {
+      const v = cell ? (cell.f ?? cell.v) : null;
+      return (v !== null && v !== undefined && String(v).trim()) ? String(v).trim() : `col_${i}`;
+    });
+    dataRows = dataRows.slice(1);
+  } else {
+    headers = cols.map((c,i) => (c.label && c.label.trim()) || (c.id) || `col_${i}`);
+  }
+
+  const rows = dataRows.map(r => {
     const obj = {};
     r.c.forEach((cell, i) => {
       let val = null;
@@ -318,7 +342,7 @@ async function fetchTabByName(sheetId, tabName){
     });
     return obj;
   });
-  return { headers, rows };
+  return { headers, rows, headersWereRebuiltFromFirstRow: allLabelsEmpty };
 }
 
 /* Fetch a single tab's data via the gviz JSON endpoint, addressed by gid.
@@ -331,21 +355,7 @@ async function fetchTabByGid(sheetId, gid){
   const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
   const data = JSON.parse(jsonStr);
   if(!data.table || !data.table.cols) return { headers: [], rows: [] };
-
-  const headers = data.table.cols.map((c,i) => (c.label && c.label.trim()) || (c.id) || `col_${i}`);
-  const rows = (data.table.rows || []).map(r => {
-    const obj = {};
-    r.c.forEach((cell, i) => {
-      let val = null;
-      if(cell){
-        if(cell.f !== undefined && cell.f !== null) val = cell.f;
-        else if(cell.v !== undefined) val = cell.v;
-      }
-      obj[headers[i]] = val;
-    });
-    return obj;
-  });
-  return { headers, rows };
+  return extractHeadersAndRows(data);
 }
 
 /* Try a probe range of gids, used only as a last-resort fallback if both the
@@ -482,8 +492,8 @@ async function loadAllData(){
   // ---- Attempt 1: fetch by the known, exact tab names (most reliable) ----
   for(const [role, tabName] of Object.entries(SHEET_TAB_NAMES)){
     try{
-      const { headers, rows } = await fetchTabByName(SHEET_ID, tabName);
-      log(`قراءة التبويب "${tabName}": ${headers.length} عمود، ${rows.length} صف خام. الأعمدة: [${headers.join(" | ")}]`);
+      const { headers, rows, headersWereRebuiltFromFirstRow } = await fetchTabByName(SHEET_ID, tabName);
+      log(`قراءة التبويب "${tabName}": ${headers.length} عمود، ${rows.length} صف خام. الأعمدة (كل واحد بين علامتين): [${headers.map(h=>`"${h}"`).join(", ")}]${headersWereRebuiltFromFirstRow ? " ⚠️ تم إعادة بناء الأعمدة من الصف الأول لأن جوجل لم يُرجع عناوين أعمدة رسمية" : ""}`);
       if(headers.length) tabResults.push({ gid:null, name:tabName, headers, rows });
     }catch(e){
       log(`فشل قراءة التبويب "${tabName}": ${e.message}`);
