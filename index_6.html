@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Filtrac | لوحة قيادة الفاقد والإنتاج</title>
+
+<!-- ===================== CDN LIBRARIES ===================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<!-- Google Fonts: Arabic + Latin -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  /* ====== Design Tokens ====== */
+  --c-primary:#0F172A;      /* Deep navy - structure / headers */
+  --c-secondary:#1E40AF;    /* Royal blue - primary actions/lines */
+  --c-accent:#0891B2;       /* Cyan - secondary data series */
+  --c-success:#10B981;      /* Green - good / yield */
+  --c-warning:#F59E0B;      /* Amber - caution */
+  --c-danger:#EF4444;       /* Red - critical waste */
+  --c-bg:#F8FAFC;           /* Light bg */
+
+  --c-surface:#FFFFFF;
+  --c-surface-2:#F1F5F9;
+  --c-border:#E2E8F0;
+  --c-text:#0F172A;
+  --c-text-muted:#64748B;
+  --c-text-faint:#94A3B8;
+
+  --radius-lg:18px;
+  --radius-md:12px;
+  --radius-sm:8px;
+  --shadow-card: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -8px rgba(15,23,42,.08);
+  --shadow-card-hover: 0 4px 8px rgba(15,23,42,.06), 0 16px 36px -10px rgba(15,23,42,.14);
+  --shadow-pop: 0 20px 60px -15px rgba(15,23,42,.35);
+
+  --font-display:'Tajawal','IBM Plex Sans Arabic',sans-serif;
+  --font-body:'IBM Plex Sans Arabic','Tajawal',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+
+[data-theme="dark"]{
+  --c-bg:#0B1220;
+  --c-surface:#101826;
+  --c-surface-2:#15202F;
+  --c-border:#22304A;
+  --c-text:#E7ECF3;
+  --c-text-muted:#93A3BD;
+  --c-text-faint:#5E7094;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -8px rgba(0,0,0,.45);
+  --shadow-card-hover: 0 4px 10px rgba(0,0,0,.4), 0 18px 40px -10px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--c-bg);
+  color:var(--c-text);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  transition:background .25s ease,color .25s ease;
+  min-height:100vh;
+}
+.font-display{font-family:var(--font-display);}
+.font-mono{font-family:var(--font-mono);}
+
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--c-border);border-radius:8px;}
+::-webkit-scrollbar-thumb:hover{background:var(--c-text-faint);}
+
+/* ===== Glass / Card system ===== */
+.card{
+  background:var(--c-surface);
+  border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-card);
+  transition:box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+}
+.card:hover{ box-shadow:var(--shadow-card-hover); }
+
+.glass{
+  background:rgba(255,255,255,.65);
+  backdrop-filter:blur(16px) saturate(160%);
+  -webkit-backdrop-filter:blur(16px) saturate(160%);
+  border:1px solid rgba(255,255,255,.4);
+}
+[data-theme="dark"] .glass{
+  background:rgba(16,24,38,.65);
+  border:1px solid rgba(255,255,255,.06);
+}
+
+.kpi-card{ position:relative; overflow:hidden; }
+.kpi-card::before{
+  content:"";
+  position:absolute; inset:0 0 auto 0; height:3px;
+  background:linear-gradient(90deg,var(--bar-color,var(--c-secondary)),transparent 140%);
+}
+
+/* shimmer skeleton */
+.skeleton{
+  position:relative; overflow:hidden;
+  background:var(--c-surface-2);
+  border-radius:var(--radius-sm);
+}
+.skeleton::after{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(100deg, transparent 30%, rgba(148,163,184,.25) 50%, transparent 70%);
+  animation:shimmer 1.4s infinite;
+}
+@keyframes shimmer{ from{ transform:translateX(-100%);} to{ transform:translateX(100%);} }
+
+@keyframes fadeUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+.fade-up{ animation:fadeUp .5s ease both; }
+
+@keyframes pulseDot{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+.pulse-dot{ animation:pulseDot 1.8s ease-in-out infinite; }
+
+.scrollbar-thin{scrollbar-width:thin;}
+
+/* Tooltip */
+[data-tip]{ position:relative; }
+[data-tip]:hover::after{
+  content:attr(data-tip);
+  position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%);
+  background:var(--c-primary); color:#fff; font-size:11px; padding:6px 10px;
+  border-radius:8px; white-space:nowrap; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25);
+  font-family:var(--font-body);
+}
+[data-tip]:hover::before{
+  content:""; position:absolute; bottom:calc(100% + 3px); left:50%; transform:translateX(-50%);
+  border:5px solid transparent; border-top-color:var(--c-primary); z-index:50;
+}
+
+/* Filter chip */
+.chip-select{
+  appearance:none;
+  background:var(--c-surface-2);
+  border:1px solid var(--c-border);
+  color:var(--c-text);
+  border-radius:10px;
+  padding:8px 32px 8px 12px;
+  font-size:13px;
+  font-family:var(--font-body);
+  cursor:pointer;
+  transition:border-color .2s, background .2s;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:left 8px center;
+}
+.chip-select:hover{ border-color:var(--c-secondary); }
+.chip-select:focus{ outline:none; border-color:var(--c-secondary); box-shadow:0 0 0 3px rgba(30,64,175,.15); }
+
+/* Buttons */
+.btn{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:13px; font-weight:600;
+  padding:9px 16px; border-radius:10px;
+  cursor:pointer; transition:all .2s ease; border:1px solid transparent;
+  font-family:var(--font-body); white-space:nowrap;
+}
+.btn-primary{ background:var(--c-secondary); color:#fff; }
+.btn-primary:hover{ background:#1d3a99; transform:translateY(-1px); box-shadow:0 8px 18px -6px rgba(30,64,175,.5); }
+.btn-ghost{ background:var(--c-surface-2); color:var(--c-text); border-color:var(--c-border); }
+.btn-ghost:hover{ background:var(--c-border); }
+.btn-icon{ padding:9px; border-radius:10px; }
+
+/* status badge */
+.badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+.badge-success{ background:rgba(16,185,129,.12); color:#0f9d6e; }
+.badge-danger{ background:rgba(239,68,68,.12); color:#dc2626; }
+.badge-warning{ background:rgba(245,158,11,.14); color:#b8790a; }
+.badge-info{ background:rgba(8,145,178,.12); color:#0891b2; }
+[data-theme="dark"] .badge-success{ color:#34d399; }
+[data-theme="dark"] .badge-danger{ color:#f87171; }
+[data-theme="dark"] .badge-warning{ color:#fbbf24; }
+[data-theme="dark"] .badge-info{ color:#22d3ee; }
+
+/* table */
+table.dt{ border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
+table.dt thead th{
+  position:sticky; top:0; background:var(--c-surface-2); color:var(--c-text-muted);
+  font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;
+  padding:11px 14px; text-align:right; border-bottom:1px solid var(--c-border); cursor:pointer; user-select:none;
+  white-space:nowrap; z-index:10;
+}
+table.dt thead th:hover{ color:var(--c-secondary); }
+table.dt tbody td{ padding:10px 14px; border-bottom:1px solid var(--c-border); color:var(--c-text); white-space:nowrap; }
+table.dt tbody tr{ transition:background .15s; }
+table.dt tbody tr:hover{ background:var(--c-surface-2); }
+
+/* tabs */
+.tab-btn{
+  padding:9px 16px; font-size:13px; font-weight:600; color:var(--c-text-muted);
+  border-radius:10px; cursor:pointer; transition:all .2s; border:1px solid transparent;
+}
+.tab-btn.active{ background:var(--c-secondary); color:#fff; }
+.tab-btn:not(.active):hover{ background:var(--c-surface-2); color:var(--c-text); }
+
+/* modal */
+.modal-overlay{ position:fixed; inset:0; background:rgba(2,6,23,.55); backdrop-filter:blur(4px); z-index:90; display:flex; align-items:center; justify-content:center; padding:20px; }
+
+/* range slider for nelson/risk thresholds future use */
+input[type="range"]{ accent-color:var(--c-secondary); }
+
+/* drilldown breadcrumb */
+.crumb{ font-size:12px; color:var(--c-text-muted); }
+.crumb b{ color:var(--c-secondary); cursor:pointer; }
+
+/* responsive grid helpers */
+.grid-kpi{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+
+@media (max-width: 768px){
+  .hide-mobile{ display:none !important; }
+  table.dt{ font-size:12px; }
+}
+
+/* print */
+@media print{
+  .no-print{ display:none !important; }
+}
+</style>
+</head>
+<body data-theme="light">
+
+<div id="app" class="min-h-screen"></div>
+
+<!-- ===================== APP SCRIPT ===================== -->
+<script>
+/* ===================== CONFIGURATION ===================== */
+// Paste your Google Sheet URL here. Sheet must be shared as "Anyone with link can view".
+const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1d5tyhmrAmMfZYo9mxn_bcjR3h9zDNofQLWI7nOgvZ6I/edit";
+
+const COLORS = {
+  primary:"#0F172A", secondary:"#1E40AF", accent:"#0891B2",
+  success:"#10B981", warning:"#F59E0B", danger:"#EF4444", bg:"#F8FAFC"
+};
+const CHART_PALETTE = ["#1E40AF","#0891B2","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899","#64748B","#0EA5E9","#84CC16"];
+
+/* ===================== SHEET ID EXTRACTION ===================== */
+function extractSheetId(url){
+  const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : null;
+}
+const SHEET_ID = extractSheetId(GOOGLE_SHEET_URL);
+
+/* =========================================================================
+   DATA LAYER
+   We read the two known tabs by their exact name ("الإنتاج اليومي" /
+   "العيوب اليومية") via the gviz "sheet=" parameter — the most reliable way
+   to address a tab, since it doesn't change just because rows or gid order
+   change. We still classify each tab's columns afterward (rather than trust
+   the tab name alone) so the dashboard keeps working even if a tab is
+   renamed or columns are reordered. A gid-probe fallback exists only for the
+   rare case where neither known tab name resolves.
+   ========================================================================= */
+
+const AppState = {
+  rawProduction: [],   // normalized array of production rows
+  rawDefects: [],      // normalized array of defect rows
+  joined: [],          // production rows enriched with their matching defect aggregates
+  defectRowsFlat: [],  // flat defect rows (for pareto / drilldowns) within current filter
+  allTabs: [],         // {gid, name}
+  lastRefresh: null,
+  isLive: false,
+  theme: "light",
+  filters: {
+    dateFrom:null, dateTo:null, year:"all", quarter:"all", month:"all",
+    product:"all", brand:"all", line:"all", shift:"all", supervisor:"all",
+    defectType:"all", defectCategory:"all", severity:"all"
+  },
+  sort:{ key:null, dir:1 },
+  page:1,
+  pageSize:10,
+  search:""
+};
+
+/* ===================== KNOWN SHEET TAB NAMES ===================== */
+// Exact tab names as they appear on the sheet tabs at the bottom of Google Sheets.
+// This is the most reliable way to read the right tab — no guessing, no scraping.
+const SHEET_TAB_NAMES = {
+  production: "الإنتاج اليومي",
+  defects: "العيوب اليومية"
+};
+
+/* Fetch a single tab's data via the gviz JSON endpoint, addressed by its exact
+   tab name (works for "Anyone with link" sheets, and is far more reliable than
+   gid-guessing since tab names don't change just because rows/columns do). */
+async function fetchTabByName(sheetId, tabName){
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const data = JSON.parse(jsonStr);
+  if(!data.table || !data.table.cols) return { headers: [], rows: [] };
+
+  const headers = data.table.cols.map((c,i) => (c.label && c.label.trim()) || (c.id) || `col_${i}`);
+  const rows = (data.table.rows || []).map(r => {
+    const obj = {};
+    r.c.forEach((cell, i) => {
+      let val = null;
+      if(cell){
+        if(cell.f !== undefined && cell.f !== null) val = cell.f;
+        else if(cell.v !== undefined) val = cell.v;
+      }
+      obj[headers[i]] = val;
+    });
+    return obj;
+  });
+  return { headers, rows };
+}
+
+/* Fetch a single tab's data via the gviz JSON endpoint, addressed by gid.
+   Used only as a fallback if a tab name above doesn't resolve. */
+async function fetchTabByGid(sheetId, gid){
+  const gidParam = (gid !== undefined && gid !== null) ? `&gid=${gid}` : "";
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gidParam}`;
+  const res = await fetch(url);
+  const text = await res.text();
+  const jsonStr = text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const data = JSON.parse(jsonStr);
+  if(!data.table || !data.table.cols) return { headers: [], rows: [] };
+
+  const headers = data.table.cols.map((c,i) => (c.label && c.label.trim()) || (c.id) || `col_${i}`);
+  const rows = (data.table.rows || []).map(r => {
+    const obj = {};
+    r.c.forEach((cell, i) => {
+      let val = null;
+      if(cell){
+        if(cell.f !== undefined && cell.f !== null) val = cell.f;
+        else if(cell.v !== undefined) val = cell.v;
+      }
+      obj[headers[i]] = val;
+    });
+    return obj;
+  });
+  return { headers, rows };
+}
+
+/* Try a probe range of gids, used only as a last-resort fallback if both the
+   known tab names AND a wider name search fail. */
+async function probeAllTabs(sheetId){
+  const found = [];
+  for(let gid = 0; gid < 12; gid++){
+    try{
+      const { headers, rows } = await fetchTabByGid(sheetId, gid);
+      if(headers.length && rows.length){ found.push({ gid, headers, rows }); }
+    }catch(e){ /* tab doesn't exist at this gid, skip */ }
+  }
+  return found;
+}
+
+
+/* =========================================================================
+   COLUMN DETECTION HELPERS
+   Map loosely-named columns (Arabic or English) to canonical field names.
+   ========================================================================= */
+const FIELD_ALIASES = {
+  date:        ["date","التاريخ","تاريخ"],
+  line:        ["line","الخط","خط"],
+  filterCode:  ["filter_code","filter code","كود الفلتر","كود الفلتر (type)","رقم الفلتر"],
+  productType: ["product_type","نوع المنتج","product type"],
+  brand:       ["brand","الماركة","ماركة"],
+  producedQty: ["produced_quantity","الكمية المنتجة","produced qty","quantity"],
+  shift:       ["shift","الوردية","وردية"],
+  supervisor:  ["supervisor","المشرف"],
+  key:         ["key"],
+  defectCategory: ["defect_category","فئة العيب"],
+  defectType:     ["defect_type","نوع العيب"],
+  defectSeverity: ["defect_severity","تأثير العيب","severity"],
+  defectQty:      ["defect_quantity","العدد","defect qty","defects"],
+  detectionPoint: ["detection_point","مكان الاكتشاف"],
+  remarks:        ["remarks","ملاحظات"],
+  defectRate:     ["defect_rate","نسبة العيب"]
+};
+
+function normalizeHeader(h){
+  return String(h||"").trim().toLowerCase().replace(/\s+/g," ");
+}
+
+function buildFieldMap(headers){
+  const map = {};
+  const normHeaders = headers.map(normalizeHeader);
+  Object.entries(FIELD_ALIASES).forEach(([field, aliases]) => {
+    const idx = normHeaders.findIndex(h => aliases.some(a => h === normalizeHeader(a)));
+    if(idx !== -1) map[field] = headers[idx];
+  });
+  return map;
+}
+
+/* Classify a tab's rows as 'production', 'defects', or 'other' based on which
+   canonical fields are present and populated. */
+function classifyTab(headers, rows){
+  const map = buildFieldMap(headers);
+  const hasProdSignal = map.producedQty && map.line;
+  const hasDefectSignal = map.defectType && map.defectQty;
+  // require at least a handful of non-empty rows to count as real data
+  const populatedRows = rows.filter(r => Object.values(r).some(v => v !== null && v !== ""));
+  if(populatedRows.length < 3) return { kind:"other", map, rows: populatedRows };
+  if(hasDefectSignal) return { kind:"defects", map, rows: populatedRows };
+  if(hasProdSignal) return { kind:"production", map, rows: populatedRows };
+  return { kind:"other", map, rows: populatedRows };
+}
+
+/* =========================================================================
+   PARSING HELPERS
+   ========================================================================= */
+function parseSheetDate(val){
+  if(val === null || val === undefined || val === "") return null;
+  if(val instanceof Date) return val;
+  if(typeof val === "string"){
+    // gviz Date(yyyy,m,d) literal style sometimes appears in .f as formatted string already
+    let m = val.match(/^Date\((\d+),(\d+),(\d+)\)$/);
+    if(m) return new Date(+m[1], +m[2], +m[3]);
+    // ISO yyyy-mm-dd
+    m = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+    // m/d/yyyy
+    m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(m) return new Date(+m[3], +m[1]-1, +m[2]);
+    const d = new Date(val);
+    if(!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+function toNumber(val){
+  if(val === null || val === undefined || val === "") return 0;
+  if(typeof val === "number") return val;
+  // Arabic-Indic digits + Arabic thousands separators (٬) and decimal (٫)
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+  let s = String(val).split("").map(ch => {
+    const idx = arabicDigits.indexOf(ch);
+    return idx !== -1 ? String(idx) : ch;
+  }).join("");
+  s = s.replace(/[٬,]/g,"").replace(/٫/g,".").replace(/%/g,"").trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function fmtInt(n){ return Math.round(n).toLocaleString("en-US"); }
+function fmtPct(n, digits=2){ return (isFinite(n) ? n : 0).toFixed(digits) + "%"; }
+function fmtDate(d){
+  if(!d) return "—";
+  return d.toLocaleDateString("en-CA"); // yyyy-mm-dd, locale-neutral
+}
+const MONTH_NAMES_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+
+function deriveDateParts(d){
+  if(!d) return { year:null, quarter:null, month:null, monthName:null, week:null, day:null };
+  const year = d.getFullYear();
+  const month = d.getMonth()+1;
+  const quarter = Math.ceil(month/3);
+  const day = d.getDate();
+  const firstJan = new Date(year,0,1);
+  const week = Math.ceil((((d - firstJan)/86400000) + firstJan.getDay()+1)/7);
+  return { year, quarter, month, monthName: MONTH_NAMES_AR[month-1], week, day };
+}
+
+/* =========================================================================
+   MAIN LOAD PIPELINE
+   ========================================================================= */
+async function loadAllData(){
+  if(!SHEET_ID) throw new Error("لم يتم العثور على معرف الشيت في الرابط المُدخل");
+
+  let tabResults = [];
+
+  // ---- Attempt 1: fetch by the known, exact tab names (most reliable) ----
+  for(const [role, tabName] of Object.entries(SHEET_TAB_NAMES)){
+    try{
+      const { headers, rows } = await fetchTabByName(SHEET_ID, tabName);
+      if(headers.length) tabResults.push({ gid:null, name:tabName, headers, rows });
+    }catch(e){ /* this named tab failed to resolve, fall through to gid probing below */ }
+  }
+
+  // ---- Attempt 2: fallback — probe gids 0-11 in case tab names changed ----
+  if(!tabResults.length){
+    const probed = await probeAllTabs(SHEET_ID);
+    tabResults = probed.map(p => ({ gid:p.gid, name:`Sheet${p.gid}`, headers:p.headers, rows:p.rows }));
+  }
+  if(!tabResults.length){
+    throw new Error(`تعذرت قراءة التبويبات "${SHEET_TAB_NAMES.production}" و"${SHEET_TAB_NAMES.defects}" — تأكد من اسم التبويب بالضبط كما يظهر على اللسان (Tab) في أسفل الشيت، ومن أن صلاحية المشاركة Anyone with link / Viewer`);
+  }
+
+  AppState.allTabs = tabResults.map(t => ({ gid:t.gid, name:t.name }));
+
+  // classify each tab
+  const productionTabs = [];
+  const defectTabs = [];
+  tabResults.forEach(t => {
+    const classified = classifyTab(t.headers, t.rows);
+    if(classified.kind === "production") productionTabs.push({ ...t, ...classified });
+    else if(classified.kind === "defects") defectTabs.push({ ...t, ...classified });
+  });
+
+  // ---- Normalize PRODUCTION rows (merge all detected production tabs) ----
+  const production = [];
+  productionTabs.forEach(t => {
+    t.rows.forEach(r => {
+      const get = f => t.map[f] ? r[t.map[f]] : null;
+      const d = parseSheetDate(get("date"));
+      if(!d) return; // skip rows without a valid date (e.g. trailing blank rows)
+      const qty = toNumber(get("producedQty"));
+      const dp = deriveDateParts(d);
+      production.push({
+        date:d, ...dp,
+        line: get("line") || "—",
+        filterCode: get("filterCode") || "—",
+        productType: get("productType") || "—",
+        brand: get("brand") || "—",
+        producedQty: qty,
+        shift: get("shift") || "—",
+        supervisor: get("supervisor") || "—",
+        key: get("key") || `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}|${get("filterCode")||""}|${get("brand")||""}`
+      });
+    });
+  });
+
+  // ---- Normalize DEFECT rows (merge all detected defect tabs) ----
+  const defects = [];
+  defectTabs.forEach(t => {
+    t.rows.forEach(r => {
+      const get = f => t.map[f] ? r[t.map[f]] : null;
+      const d = parseSheetDate(get("date"));
+      const qty = toNumber(get("defectQty"));
+      if(!d || qty <= 0) return; // skip blank trailing rows / zero-defect placeholder rows
+      const dp = deriveDateParts(d);
+      defects.push({
+        date:d, ...dp,
+        filterCode: get("filterCode") || "—",
+        brand: get("brand") || "—",
+        defectCategory: get("defectCategory") || "غير محدد",
+        defectType: get("defectType") || "غير محدد",
+        defectSeverity: get("defectSeverity") || "غير محدد",
+        defectQty: qty,
+        detectionPoint: get("detectionPoint") || "—",
+        remarks: get("remarks") || "",
+        key: get("key") || `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}|${get("filterCode")||""}|${get("brand")||""}`
+      });
+    });
+  });
+
+  // ---- Aggregate defects per key for joining onto production rows ----
+  const defectAggByKey = {};
+  defects.forEach(d => {
+    if(!defectAggByKey[d.key]) defectAggByKey[d.key] = 0;
+    defectAggByKey[d.key] += d.defectQty;
+  });
+
+  const joined = production.map(p => {
+    const totalDefects = defectAggByKey[p.key] || 0;
+    const yieldQty = Math.max(p.producedQty - totalDefects, 0);
+    const wastePct = p.producedQty > 0 ? (totalDefects / p.producedQty) * 100 : 0;
+    const yieldPct = p.producedQty > 0 ? (yieldQty / p.producedQty) * 100 : 0;
+    let riskLevel = "منخفض";
+    if(wastePct >= 5) riskLevel = "مرتفع";
+    else if(wastePct >= 2) riskLevel = "متوسط";
+    return { ...p, totalDefects, yieldQty, wastePct, yieldPct, riskLevel };
+  });
+
+  AppState.rawProduction = production;
+  AppState.rawDefects = defects;
+  AppState.joined = joined;
+  AppState.lastRefresh = new Date();
+  AppState.isLive = true;
+}
+
+/* =========================================================================
+   FILTERING
+   ========================================================================= */
+function getFilterOptions(){
+  const j = AppState.joined;
+  const uniq = (arr) => [...new Set(arr.filter(v => v !== null && v !== undefined && v !== "—"))].sort();
+  return {
+    years: uniq(j.map(r=>r.year)),
+    products: uniq(j.map(r=>r.productType)),
+    brands: uniq(j.map(r=>r.brand)),
+    lines: uniq(j.map(r=>r.line)),
+    shifts: uniq(j.map(r=>r.shift)),
+    supervisors: uniq(j.map(r=>r.supervisor)),
+    defectTypes: uniq(AppState.rawDefects.map(r=>r.defectType)),
+    defectCategories: uniq(AppState.rawDefects.map(r=>r.defectCategory))
+  };
+}
+
+function applyFilters(rows, opts={}){
+  const f = AppState.filters;
+  const skipDate = opts.skipDate;
+  return rows.filter(r => {
+    if(f.year !== "all" && String(r.year) !== String(f.year)) return false;
+    if(f.quarter !== "all" && String(r.quarter) !== String(f.quarter)) return false;
+    if(f.month !== "all" && String(r.month) !== String(f.month)) return false;
+    if(f.product !== "all" && r.productType !== f.product) return false;
+    if(f.brand !== "all" && r.brand !== f.brand) return false;
+    if(f.line !== "all" && r.line !== f.line) return false;
+    if(f.shift !== "all" && r.shift !== f.shift) return false;
+    if(f.supervisor !== "all" && r.supervisor !== f.supervisor) return false;
+    if(!skipDate){
+      if(f.dateFrom && r.date < f.dateFrom) return false;
+      if(f.dateTo && r.date > f.dateTo) return false;
+    }
+    return true;
+  });
+}
+
+function applyDefectFilters(rows){
+  const f = AppState.filters;
+  return rows.filter(r => {
+    if(f.year !== "all" && String(r.year) !== String(f.year)) return false;
+    if(f.quarter !== "all" && String(r.quarter) !== String(f.quarter)) return false;
+    if(f.month !== "all" && String(r.month) !== String(f.month)) return false;
+    if(f.brand !== "all" && r.brand !== f.brand) return false;
+    if(f.defectType !== "all" && r.defectType !== f.defectType) return false;
+    if(f.defectCategory !== "all" && r.defectCategory !== f.defectCategory) return false;
+    if(f.dateFrom && r.date < f.dateFrom) return false;
+    if(f.dateTo && r.date > f.dateTo) return false;
+    return true;
+  });
+}
+
+function getFilteredData(){
+  return {
+    production: applyFilters(AppState.joined),
+    defects: applyDefectFilters(AppState.rawDefects)
+  };
+}
+
+/* =========================================================================
+   KPI & ANALYTICS COMPUTATION
+   ========================================================================= */
+function computeKPIs(prod, defs){
+  const totalProduced = prod.reduce((s,r)=>s+r.producedQty,0);
+  const totalWaste = defs.reduce((s,r)=>s+r.defectQty,0);
+  const wastePct = totalProduced > 0 ? (totalWaste/totalProduced)*100 : 0;
+  const yieldPct = 100 - wastePct;
+  const goodProduction = totalProduced - totalWaste;
+
+  // group by day for averages / best-worst day
+  const byDay = {};
+  prod.forEach(r => {
+    const k = fmtDate(r.date);
+    if(!byDay[k]) byDay[k] = { produced:0, waste:0 };
+    byDay[k].produced += r.producedQty;
+  });
+  defs.forEach(r => {
+    const k = fmtDate(r.date);
+    if(!byDay[k]) byDay[k] = { produced:0, waste:0 };
+    byDay[k].waste += r.defectQty;
+  });
+  const dayKeys = Object.keys(byDay);
+  const avgDailyProd = dayKeys.length ? totalProduced/dayKeys.length : 0;
+  const avgDailyWaste = dayKeys.length ? totalWaste/dayKeys.length : 0;
+  let bestProdDay = null, worstWasteDay = null;
+  dayKeys.forEach(k => {
+    if(!bestProdDay || byDay[k].produced > byDay[bestProdDay].produced) bestProdDay = k;
+    if(!worstWasteDay || byDay[k].waste > byDay[worstWasteDay].waste) worstWasteDay = k;
+  });
+
+  // group by line
+  const byLine = groupSum(prod, "line", "producedQty");
+  const byLineWaste = {};
+  prod.forEach(r => { byLineWaste[r.line] = (byLineWaste[r.line]||0) + r.totalDefects; });
+  let bestLine=null, worstLine=null, bestLineRate=Infinity, worstLineRate=-Infinity;
+  Object.keys(byLine).forEach(line => {
+    const rate = byLine[line] > 0 ? (byLineWaste[line]||0)/byLine[line]*100 : 0;
+    if(rate < bestLineRate){ bestLineRate = rate; bestLine = line; }
+    if(rate > worstLineRate){ worstLineRate = rate; worstLine = line; }
+  });
+
+  // group by product (filterCode)
+  const byProductQty = groupSum(prod, "filterCode", "producedQty");
+  const byProductWaste = {};
+  prod.forEach(r => { byProductWaste[r.filterCode] = (byProductWaste[r.filterCode]||0) + r.totalDefects; });
+  let bestProduct=null, worstProduct=null, bestRate=Infinity, worstRate=-Infinity;
+  Object.keys(byProductQty).forEach(p => {
+    if(byProductQty[p] < 50) return; // ignore tiny samples for fairness
+    const rate = (byProductWaste[p]||0)/byProductQty[p]*100;
+    if(rate < bestRate){ bestRate = rate; bestProduct = p; }
+    if(rate > worstRate){ worstRate = rate; worstProduct = p; }
+  });
+
+  return {
+    totalProduced, totalWaste, wastePct, yieldPct, goodProduction,
+    avgDailyProd, avgDailyWaste, bestProdDay, worstWasteDay,
+    bestLine, worstLine, bestLineRate, worstLineRate,
+    bestProduct, worstProduct, bestRate: isFinite(bestRate)?bestRate:0, worstRate: isFinite(worstRate)?worstRate:0
+  };
+}
+
+function groupSum(rows, keyField, valField){
+  const out = {};
+  rows.forEach(r => { out[r[keyField]] = (out[r[keyField]]||0) + r[valField]; });
+  return out;
+}
+
+function paretoAnalysis(defs){
+  const byType = groupSum(defs, "defectType", "defectQty");
+  const total = Object.values(byType).reduce((a,b)=>a+b,0);
+  const sorted = Object.entries(byType).sort((a,b)=>b[1]-a[1]);
+  let cum = 0;
+  return sorted.map(([type, qty]) => {
+    cum += qty;
+    return { type, qty, pct: total>0?(qty/total*100):0, cumPct: total>0?(cum/total*100):0 };
+  });
+}
+
+function trendByPeriod(prod, defs, granularity="month"){
+  const keyFn = (r) => granularity==="month" ? `${r.year}-${String(r.month).padStart(2,"0")}` : fmtDate(r.date);
+  const labelFn = (r) => granularity==="month" ? `${r.monthName} ${r.year}` : fmtDate(r.date);
+  const map = {};
+  prod.forEach(r => {
+    const k = keyFn(r);
+    if(!map[k]) map[k] = { key:k, label: labelFn(r), produced:0, waste:0, sortDate:r.date };
+    map[k].produced += r.producedQty;
+  });
+  defs.forEach(r => {
+    const k = keyFn(r);
+    if(!map[k]) map[k] = { key:k, label: labelFn(r), produced:0, waste:0, sortDate:r.date };
+    map[k].waste += r.defectQty;
+  });
+  return Object.values(map).sort((a,b)=>a.sortDate-b.sortDate).map(d => ({
+    ...d, wastePct: d.produced>0 ? (d.waste/d.produced*100) : 0
+  }));
+}
+
+function movingAverage(arr, field, windowSize=3){
+  return arr.map((_,i) => {
+    const start = Math.max(0,i-windowSize+1);
+    const slice = arr.slice(start,i+1);
+    return slice.reduce((s,d)=>s+d[field],0)/slice.length;
+  });
+}
+
+function detectOutliers(arr, field){
+  if(arr.length < 4) return arr.map(()=>false);
+  const vals = arr.map(d=>d[field]);
+  const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const sd = Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/vals.length);
+  return vals.map(v => sd>0 ? Math.abs(v-mean) > 2*sd : false);
+}
+
+function generateInsights(prod, defs, kpi){
+  const insights = [];
+  const pareto = paretoAnalysis(defs);
+  if(pareto.length){
+    insights.push({
+      icon:"target", tone:"danger",
+      title:"أكبر مصدر للفاقد",
+      text:`نوع العيب "${pareto[0].type}" يمثل ${fmtPct(pareto[0].pct,1)} من إجمالي الفاقد (${fmtInt(pareto[0].qty)} وحدة) — يستحق أولوية فورية لتحليل السبب الجذري.`
+    });
+  }
+  // fastest growing defect (compare first half vs second half of period by date)
+  const sortedDefs = [...defs].sort((a,b)=>a.date-b.date);
+  if(sortedDefs.length > 10){
+    const mid = Math.floor(sortedDefs.length/2);
+    const firstHalf = groupSum(sortedDefs.slice(0,mid), "defectType", "defectQty");
+    const secondHalf = groupSum(sortedDefs.slice(mid), "defectType", "defectQty");
+    let fastestGrowing=null, maxGrowth=-Infinity;
+    Object.keys(secondHalf).forEach(type => {
+      const before = firstHalf[type]||0;
+      const growth = secondHalf[type] - before;
+      if(growth > maxGrowth){ maxGrowth = growth; fastestGrowing = type; }
+    });
+    if(fastestGrowing && maxGrowth > 0){
+      insights.push({
+        icon:"trend-up", tone:"warning",
+        title:"أسرع فئة عيوب في التصاعد",
+        text:`عيب "${fastestGrowing}" يتزايد بشكل واضح خلال الفترة الأخيرة من البيانات — ينصح بمتابعته كمؤشر إنذار مبكر.`
+      });
+    }
+  }
+  if(kpi.worstLine && kpi.worstLine !== kpi.bestLine){
+    insights.push({
+      icon:"alert-triangle", tone:"danger",
+      title:"أضعف خط إنتاج",
+      text:`خط "${kpi.worstLine}" يسجل أعلى نسبة فاقد (${fmtPct(kpi.worstLineRate,2)}) — بينما خط "${kpi.bestLine}" يحقق أفضل أداء (${fmtPct(kpi.bestLineRate,2)}).`
+    });
+  }
+  if(kpi.worstProduct){
+    insights.push({
+      icon:"package", tone:"warning",
+      title:"أعلى فرصة تحسين على مستوى المنتج",
+      text:`كود الفلتر "${kpi.worstProduct}" يسجل نسبة فاقد ${fmtPct(kpi.worstRate,2)} وهي الأعلى بين المنتجات ذات الحجم الكافي للمقارنة — فرصة تحسين مباشرة على خطوط الإنتاج.`
+    });
+  }
+  if(kpi.wastePct > 0){
+    const riskTone = kpi.wastePct >= 5 ? "danger" : kpi.wastePct >= 2 ? "warning" : "success";
+    insights.push({
+      icon:"shield-alert", tone:riskTone,
+      title:"المستوى العام لمخاطر الجودة",
+      text:`نسبة الفاقد الكلية ${fmtPct(kpi.wastePct,2)} من إجمالي الإنتاج، ونسبة الإنتاج السليم ${fmtPct(kpi.yieldPct,2)} — ${kpi.wastePct>=5?"معدل مرتفع يستدعي خطة تحسين عاجلة":kpi.wastePct>=2?"معدل متوسط قابل للتحسين بخطوات Kaizen مركزة":"معدل جيد، يُنصح بالحفاظ على الانضباط الحالي في الفحص"}.`
+    });
+  }
+  return insights;
+}
+
+/* =========================================================================
+   ICONS (inline SVG, stroke-based, currentColor)
+   ========================================================================= */
+const ICONS = {
+  factory:`<path d="M2 20h20"/><path d="M4 20V10l5 4V10l5 4V10l4 3v7"/><path d="M16 8V5l3 2"/>`,
+  trend_up:`<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>`,
+  trend_down:`<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>`,
+  alert:`<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
+  package:`<path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/>`,
+  shield:`<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/>`,
+  target:`<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>`,
+  refresh:`<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`,
+  download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+  moon:`<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`,
+  sun:`<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>`,
+  expand:`<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>`,
+  search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+  x:`<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
+  chevron_down:`<polyline points="6 9 12 15 18 9"/>`,
+  filter:`<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>`,
+  droplet:`<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5S5 13 5 15a7 7 0 0 0 7 7Z"/>`,
+  layers:`<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>`,
+  users:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+  clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+  check:`<polyline points="20 6 9 17 4 12"/>`,
+  grid:`<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>`
+};
+function icon(name, size=18, cls=""){
+  return `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||""}</svg>`;
+}
+
+/* =========================================================================
+   RENDER: APP SHELL
+   ========================================================================= */
+const chartInstances = {};
+function destroyChart(id){ if(chartInstances[id]){ chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+function renderApp(){
+  const app = document.getElementById("app");
+  if(!AppState.isLive){
+    app.innerHTML = renderLoadingState();
+    return;
+  }
+  app.innerHTML = `
+    ${renderHeader()}
+    <main class="max-w-[1480px] mx-auto px-4 md:px-6 py-6 space-y-6">
+      ${renderFiltersBar()}
+      ${renderKpiGrid()}
+      ${renderChartsGrid()}
+      ${renderInsightsPanel()}
+      ${renderTableSection()}
+    </main>
+    <footer class="max-w-[1480px] mx-auto px-6 py-8 text-center text-xs" style="color:var(--c-text-faint)">
+      لوحة قيادة فاقد وإنتاج الفلاتر — مصمّمة لدعم اتخاذ القرار التنفيذي في فلتراك
+    </footer>
+  `;
+  attachFilterHandlers();
+  renderAllCharts();
+  attachTableHandlers();
+}
+
+function renderLoadingState(){
+  return `
+  <div class="min-h-screen flex flex-col items-center justify-center gap-5 px-6 text-center">
+    <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:var(--c-secondary);color:#fff;">
+      ${icon("factory",30)}
+    </div>
+    <div class="font-display font-extrabold text-lg" style="color:var(--c-text)">جاري الاتصال بمصدر البيانات Live</div>
+    <div class="text-sm" style="color:var(--c-text-muted)">يتم الآن قراءة بيانات الإنتاج والفاقد من Google Sheets…</div>
+    <div class="w-64 h-1.5 rounded-full overflow-hidden skeleton"></div>
+  </div>`;
+}
+
+function renderErrorState(msg){
+  const app = document.getElementById("app");
+  app.innerHTML = `
+  <div class="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:var(--c-danger);color:#fff;">
+      ${icon("alert",30)}
+    </div>
+    <div class="font-display font-extrabold text-lg" style="color:var(--c-text)">تعذّر تحميل البيانات</div>
+    <div class="text-sm max-w-md" style="color:var(--c-text-muted)">${msg}</div>
+    <button onclick="bootstrapApp()" class="btn btn-primary mt-2">${icon("refresh",16)} إعادة المحاولة</button>
+  </div>`;
+}
+
+function renderHeader(){
+  const last = AppState.lastRefresh ? AppState.lastRefresh.toLocaleString("ar-EG",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "—";
+  return `
+  <header class="glass no-print sticky top-0 z-40 border-b" style="border-color:var(--c-border)">
+    <div class="max-w-[1480px] mx-auto px-4 md:px-6 h-[68px] flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,var(--c-secondary),var(--c-accent));color:#fff;">
+          ${icon("factory",20)}
+        </div>
+        <div class="min-w-0">
+          <div class="font-display font-extrabold text-[15px] md:text-[17px] leading-tight truncate" style="color:var(--c-text)">لوحة قيادة الفاقد والإنتاج — فلتراك</div>
+          <div class="flex items-center gap-2 text-[11px]" style="color:var(--c-text-muted)">
+            <span class="flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full pulse-dot" style="background:var(--c-success)"></span>
+              متصل ببيانات Google Sheets المباشرة
+            </span>
+            <span class="hide-mobile">· آخر تحديث ${last}</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button data-tip="تحديث البيانات الآن" onclick="bootstrapApp()" class="btn btn-ghost btn-icon">${icon("refresh",16)}</button>
+        <button data-tip="تصدير Excel" onclick="exportExcel()" class="btn btn-ghost btn-icon hide-mobile">${icon("download",16)}</button>
+        <button data-tip="الوضع الليلي" onclick="toggleTheme()" id="themeToggleBtn" class="btn btn-ghost btn-icon">${icon(AppState.theme==="dark"?"sun":"moon",16)}</button>
+        <button data-tip="ملء الشاشة" onclick="toggleFullscreen()" class="btn btn-ghost btn-icon hide-mobile">${icon("expand",16)}</button>
+      </div>
+    </div>
+  </header>`;
+}
+
+function renderFiltersBar(){
+  const opts = getFilterOptions();
+  const f = AppState.filters;
+  const sel = (id, value, options, placeholder) => `
+    <select id="${id}" class="chip-select">
+      <option value="all">${placeholder}</option>
+      ${options.map(o => `<option value="${o}" ${String(value)===String(o)?"selected":""}>${o}</option>`).join("")}
+    </select>`;
+
+  return `
+  <section class="card p-4 no-print fade-up">
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2 font-display font-bold text-sm" style="color:var(--c-text)">
+        ${icon("filter",16)} الفلاتر والشرائح
+      </div>
+      <button onclick="resetFilters()" class="text-xs font-semibold" style="color:var(--c-secondary)">إعادة تعيين الكل</button>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">من تاريخ</label>
+        <input type="date" id="f_dateFrom" class="chip-select w-full" value="${f.dateFrom?fmtDate(f.dateFrom):''}">
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">إلى تاريخ</label>
+        <input type="date" id="f_dateTo" class="chip-select w-full" value="${f.dateTo?fmtDate(f.dateTo):''}">
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">السنة</label>
+        ${sel("f_year", f.year, opts.years, "كل السنوات")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">الربع</label>
+        ${sel("f_quarter", f.quarter, [1,2,3,4], "كل الأرباع")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">نوع المنتج</label>
+        ${sel("f_product", f.product, opts.products, "كل المنتجات")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">الماركة</label>
+        ${sel("f_brand", f.brand, opts.brands, "كل الماركات")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">الخط</label>
+        ${sel("f_line", f.line, opts.lines, "كل الخطوط")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">الوردية</label>
+        ${sel("f_shift", f.shift, opts.shifts, "كل الورديات")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">المشرف</label>
+        ${sel("f_supervisor", f.supervisor, opts.supervisors, "كل المشرفين")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">نوع العيب</label>
+        ${sel("f_defectType", f.defectType, opts.defectTypes, "كل أنواع العيوب")}
+      </div>
+      <div>
+        <label class="block text-[11px] mb-1" style="color:var(--c-text-muted)">فئة العيب</label>
+        ${sel("f_defectCategory", f.defectCategory, opts.defectCategories, "كل الفئات")}
+      </div>
+    </div>
+  </section>`;
+}
+
+function attachFilterHandlers(){
+  const ids = {
+    f_dateFrom:"dateFrom", f_dateTo:"dateTo", f_year:"year", f_quarter:"quarter",
+    f_product:"product", f_brand:"brand", f_line:"line", f_shift:"shift",
+    f_supervisor:"supervisor", f_defectType:"defectType", f_defectCategory:"defectCategory"
+  };
+  Object.entries(ids).forEach(([elId, field]) => {
+    const el = document.getElementById(elId);
+    if(!el) return;
+    el.addEventListener("change", (e) => {
+      let val = e.target.value;
+      if(field === "dateFrom" || field === "dateTo"){
+        AppState.filters[field] = val ? new Date(val) : null;
+      } else {
+        AppState.filters[field] = val;
+      }
+      AppState.page = 1;
+      renderApp();
+    });
+  });
+}
+
+function resetFilters(){
+  AppState.filters = {
+    dateFrom:null, dateTo:null, year:"all", quarter:"all", month:"all",
+    product:"all", brand:"all", line:"all", shift:"all", supervisor:"all",
+    defectType:"all", defectCategory:"all", severity:"all"
+  };
+  AppState.page = 1;
+  renderApp();
+}
+
+/* =========================================================================
+   RENDER: KPI GRID
+   ========================================================================= */
+function kpiCard({label, value, sub, icon:ic, tone, badge, sparkline}){
+  const toneColor = { secondary:"var(--c-secondary)", success:"var(--c-success)", warning:"var(--c-warning)", danger:"var(--c-danger)", accent:"var(--c-accent)" }[tone] || "var(--c-secondary)";
+  return `
+  <div class="card kpi-card p-4 fade-up" style="--bar-color:${toneColor}">
+    <div class="flex items-start justify-between mb-2">
+      <div class="w-9 h-9 rounded-[10px] flex items-center justify-center" style="background:${toneColor}1a;color:${toneColor}">
+        ${icon(ic,17)}
+      </div>
+      ${badge || ""}
+    </div>
+    <div class="font-display font-extrabold text-2xl leading-none mb-1 font-mono" style="color:var(--c-text)">${value}</div>
+    <div class="text-xs font-semibold mb-1" style="color:var(--c-text-muted)">${label}</div>
+    ${sub ? `<div class="text-[11px]" style="color:var(--c-text-faint)">${sub}</div>` : ""}
+  </div>`;
+}
+
+function trendBadge(deltaPct){
+  if(deltaPct === null || deltaPct === undefined || !isFinite(deltaPct)) return "";
+  const up = deltaPct >= 0;
+  return `<span class="badge ${up?'badge-danger':'badge-success'}">${icon(up?'trend_up':'trend_down',11)} ${Math.abs(deltaPct).toFixed(1)}%</span>`;
+}
+
+function renderKpiGrid(){
+  const { production, defects } = getFilteredData();
+  const kpi = computeKPIs(production, defects);
+
+  // period-over-period comparison (split filtered range in half by date for trend arrows)
+  const sortedProd = [...production].sort((a,b)=>a.date-b.date);
+  let prevWastePct = null;
+  if(sortedProd.length > 4){
+    const mid = Math.floor(sortedProd.length/2);
+    const firstHalfProd = sortedProd.slice(0,mid).reduce((s,r)=>s+r.producedQty,0);
+    const firstHalfWaste = sortedProd.slice(0,mid).reduce((s,r)=>s+r.totalDefects,0);
+    const secondHalfProd = sortedProd.slice(mid).reduce((s,r)=>s+r.producedQty,0);
+    const secondHalfWaste = sortedProd.slice(mid).reduce((s,r)=>s+r.totalDefects,0);
+    const firstPct = firstHalfProd>0 ? firstHalfWaste/firstHalfProd*100 : 0;
+    const secondPct = secondHalfProd>0 ? secondHalfWaste/secondHalfProd*100 : 0;
+    prevWastePct = firstPct>0 ? ((secondPct-firstPct)/firstPct*100) : null;
+  }
+
+  const cards = [
+    kpiCard({ label:"إجمالي الإنتاج", value: fmtInt(kpi.totalProduced), sub:`متوسط يومي ${fmtInt(kpi.avgDailyProd)} وحدة`, icon:"factory", tone:"secondary" }),
+    kpiCard({ label:"إجمالي الفاقد", value: fmtInt(kpi.totalWaste), sub:`متوسط يومي ${fmtInt(kpi.avgDailyWaste)} وحدة`, icon:"alert", tone:"danger", badge: trendBadge(prevWastePct) }),
+    kpiCard({ label:"نسبة الفاقد", value: fmtPct(kpi.wastePct), sub: kpi.wastePct>=5?"معدل مرتفع — يحتاج تدخل":kpi.wastePct>=2?"معدل متوسط":"معدل جيد", icon:"droplet", tone: kpi.wastePct>=5?"danger":kpi.wastePct>=2?"warning":"success" }),
+    kpiCard({ label:"نسبة الجودة (Yield)", value: fmtPct(kpi.yieldPct), sub:`إنتاج سليم ${fmtInt(kpi.goodProduction)} وحدة`, icon:"check", tone:"success" }),
+    kpiCard({ label:"أفضل خط إنتاج", value: kpi.bestLine || "—", sub: kpi.bestLine?`نسبة فاقد ${fmtPct(kpi.bestLineRate)}`:"لا توجد بيانات كافية", icon:"layers", tone:"success" }),
+    kpiCard({ label:"أضعف خط إنتاج", value: kpi.worstLine || "—", sub: kpi.worstLine?`نسبة فاقد ${fmtPct(kpi.worstLineRate)}`:"لا توجد بيانات كافية", icon:"layers", tone:"danger" }),
+    kpiCard({ label:"أفضل منتج (أقل فاقد)", value: kpi.bestProduct || "—", sub: kpi.bestProduct?`نسبة فاقد ${fmtPct(kpi.bestRate)}`:"—", icon:"package", tone:"success" }),
+    kpiCard({ label:"أعلى فرصة تحسين", value: kpi.worstProduct || "—", sub: kpi.worstProduct?`نسبة فاقد ${fmtPct(kpi.worstRate)}`:"—", icon:"target", tone:"warning" }),
+  ];
+
+  return `
+  <section>
+    <div class="flex items-center gap-2 mb-3 font-display font-bold text-sm" style="color:var(--c-text)">
+      ${icon("grid",16)} المؤشرات التنفيذية الرئيسية
+    </div>
+    <div class="grid-kpi">${cards.join("")}</div>
+  </section>`;
+}
+
+/* =========================================================================
+   RENDER: CHARTS GRID
+   ========================================================================= */
+function chartCard(id, title, subtitle, heightClass="h-[300px]", extraHeader=""){
+  return `
+  <div class="card p-4 fade-up">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <div class="font-display font-bold text-sm" style="color:var(--c-text)">${title}</div>
+        ${subtitle ? `<div class="text-[11px]" style="color:var(--c-text-muted)">${subtitle}</div>` : ""}
+      </div>
+      ${extraHeader}
+    </div>
+    <div class="${heightClass}"><canvas id="${id}"></canvas></div>
+  </div>`;
+}
+
+function renderChartsGrid(){
+  return `
+  <section class="space-y-5">
+    <div class="flex items-center gap-2 font-display font-bold text-sm" style="color:var(--c-text)">
+      ${icon("trend_up",16)} التحليلات والرسومات البيانية
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      ${chartCard("chartTrend","الإنتاج مقابل الفاقد عبر الزمن","حجم الإنتاج اليومي/الشهري مقابل كمية الفاقد المقابلة")}
+      ${chartCard("chartWastePct","اتجاه نسبة الفاقد %","مع متوسط متحرك لرصد الاتجاه العام والقيم الشاذة")}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-2">
+        ${chartCard("chartPareto","تحليل باريتو لأسباب الفاقد (80/20)","الأعمدة = الكمية، الخط = النسبة التراكمية","h-[340px]")}
+      </div>
+      ${chartCard("chartTop10","أعلى 10 مساهمين في الفاقد","الترتيب التنازلي حسب الكمية","h-[340px]")}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      ${chartCard("chartByProduct","الفاقد حسب المنتج","أعلى 8 أكواد فلتر من حيث كمية الفاقد")}
+      ${chartCard("chartByLine","الفاقد حسب خط الإنتاج","مقارنة نسبة الفاقد بين الخطوط")}
+      ${chartCard("chartByShift","الفاقد حسب الوردية","توزيع الفاقد على الورديات")}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      ${chartCard("chartMonthly","الأداء الشهري — إنتاج وجودة","اتجاه الإنتاج الكلي ونسبة الجودة Yield شهرياً")}
+      ${chartCard("chartDefectDist","توزيع العيوب حسب الفئة","حصة كل فئة عيب من إجمالي الفاقد")}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      ${chartCard("chartRisk","تحليل المخاطر — أيام حسب مستوى الفاقد","تصنيف الأيام: منخفض / متوسط / مرتفع الخطورة")}
+      ${chartCard("chartYieldGauge","نظرة عامة على الجودة (Yield)","نسبة الإنتاج السليم مقابل الفاقد الكلي")}
+    </div>
+
+    ${renderHeatmap()}
+  </section>`;
+}
+
+/* =========================================================================
+   HEATMAP (custom HTML/CSS grid: Line x Weekday waste intensity)
+   ========================================================================= */
+function renderHeatmap(){
+  const { production } = getFilteredData();
+  const lines = [...new Set(production.map(r=>r.line))].filter(l=>l!=="—");
+  const weekdays = ["أحد","اثنين","ثلاثاء","أربعاء","خميس","جمعة","سبت"];
+
+  const matrix = {}; // line -> weekday(0-6) -> {produced, waste}
+  lines.forEach(l => { matrix[l] = weekdays.map(()=>({produced:0,waste:0})); });
+  production.forEach(r => {
+    if(!matrix[r.line]) return;
+    const wd = r.date.getDay();
+    matrix[r.line][wd].produced += r.producedQty;
+    matrix[r.line][wd].waste += r.totalDefects;
+  });
+
+  let maxRate = 0;
+  lines.forEach(l => weekdays.forEach((_,wd) => {
+    const cell = matrix[l][wd];
+    const rate = cell.produced>0 ? cell.waste/cell.produced*100 : 0;
+    if(rate > maxRate) maxRate = rate;
+  }));
+
+  const cellColor = (rate) => {
+    if(maxRate <= 0) return "var(--c-surface-2)";
+    const t = Math.min(rate/maxRate, 1);
+    // interpolate from accent (low) to danger (high)
+    const c1 = [8,145,178], c2 = [239,68,68];
+    const c = c1.map((v,i)=>Math.round(v + (c2[i]-v)*t));
+    return `rgba(${c[0]},${c[1]},${c[2]}, ${0.12 + t*0.78})`;
+  };
+
+  if(!lines.length){
+    return `<div class="card p-5 fade-up text-sm" style="color:var(--c-text-muted)">لا توجد بيانات كافية لعرض خريطة الحرارة وفق الفلاتر الحالية.</div>`;
+  }
+
+  return `
+  <div class="card p-4 fade-up">
+    <div class="mb-3">
+      <div class="font-display font-bold text-sm" style="color:var(--c-text)">خريطة حرارة الفاقد — الخط × يوم الأسبوع</div>
+      <div class="text-[11px]" style="color:var(--c-text-muted)">كلما اتجه اللون نحو الأحمر، زادت نسبة الفاقد في ذلك اليوم لهذا الخط</div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-center" style="border-collapse:separate;border-spacing:4px;">
+        <thead>
+          <tr>
+            <th class="text-[11px] text-right" style="color:var(--c-text-muted)">الخط</th>
+            ${weekdays.map(w=>`<th class="text-[11px]" style="color:var(--c-text-muted)">${w}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${lines.map(l => `
+            <tr>
+              <td class="text-xs font-semibold text-right whitespace-nowrap pr-2" style="color:var(--c-text)">${l}</td>
+              ${weekdays.map((_,wd) => {
+                const cell = matrix[l][wd];
+                const rate = cell.produced>0 ? cell.waste/cell.produced*100 : 0;
+                return `<td class="rounded-lg" style="background:${cellColor(rate)};min-width:54px;height:40px;" data-tip="${l} — ${weekdays[wd]}: ${fmtPct(rate)}">
+                  <span class="text-[10px] font-mono font-semibold" style="color:${rate/maxRate>0.55?'#fff':'var(--c-text)'}">${cell.produced>0?fmtPct(rate,1):'—'}</span>
+                </td>`;
+              }).join("")}
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   CHART.JS RENDERING
+   ========================================================================= */
+function baseChartOptions(overrides={}){
+  const textColor = getComputedStyle(document.body).getPropertyValue("--c-text-muted").trim() || "#64748B";
+  const gridColor = getComputedStyle(document.body).getPropertyValue("--c-border").trim() || "#E2E8F0";
+  return Object.assign({
+    responsive:true, maintainAspectRatio:false,
+    interaction:{ mode:"index", intersect:false },
+    plugins:{
+      legend:{ labels:{ color:textColor, font:{family:"IBM Plex Sans Arabic", size:11.5}, usePointStyle:true, pointStyle:"circle" } },
+      tooltip:{ rtl:true, titleFont:{family:"IBM Plex Sans Arabic"}, bodyFont:{family:"IBM Plex Sans Arabic"}, backgroundColor:"#0F172A", padding:10, cornerRadius:8 },
+      datalabels:{ display:false }
+    },
+    scales:{
+      x:{ ticks:{ color:textColor, font:{family:"IBM Plex Sans Arabic", size:11} }, grid:{ color:gridColor, display:false } },
+      y:{ ticks:{ color:textColor, font:{family:"IBM Plex Sans Arabic", size:11} }, grid:{ color:gridColor } }
+    }
+  }, overrides);
+}
+
+function renderAllCharts(){
+  const { production, defects } = getFilteredData();
+  renderTrendChart(production, defects);
+  renderWastePctChart(production, defects);
+  renderParetoChart(defects);
+  renderTop10Chart(defects);
+  renderByProductChart(production);
+  renderByLineChart(production);
+  renderByShiftChart(production);
+  renderMonthlyChart(production, defects);
+  renderDefectDistChart(defects);
+  renderRiskChart(production);
+  renderYieldGauge(production, defects);
+}
+
+function renderTrendChart(production, defects){
+  const id="chartTrend"; destroyChart(id);
+  const trend = trendByPeriod(production, defects, "month");
+  const ctx = document.getElementById(id);
+  if(!ctx || !trend.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels: trend.map(t=>t.label),
+      datasets:[
+        { type:"bar", label:"الإنتاج", data: trend.map(t=>t.produced), backgroundColor:"#1E40AF99", borderRadius:6, order:2, yAxisID:"y" },
+        { type:"line", label:"الفاقد", data: trend.map(t=>t.waste), borderColor:"#EF4444", backgroundColor:"#EF444422", tension:.35, fill:true, order:1, yAxisID:"y1", pointRadius:3 }
+      ]
+    },
+    options: baseChartOptions({
+      scales:{
+        x:{ ticks:{ color:"#64748B", font:{family:"IBM Plex Sans Arabic",size:11} }, grid:{display:false} },
+        y:{ position:"left", ticks:{ color:"#64748B" }, grid:{color:"#E2E8F0"} },
+        y1:{ position:"right", ticks:{ color:"#EF4444" }, grid:{display:false} }
+      }
+    })
+  });
+}
+
+function renderWastePctChart(production, defects){
+  const id="chartWastePct"; destroyChart(id);
+  const trend = trendByPeriod(production, defects, "month");
+  const ma = movingAverage(trend, "wastePct", 3);
+  const outliers = detectOutliers(trend, "wastePct");
+  const ctx = document.getElementById(id);
+  if(!ctx || !trend.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"line",
+    data:{
+      labels: trend.map(t=>t.label),
+      datasets:[
+        { label:"نسبة الفاقد %", data: trend.map(t=>t.wastePct), borderColor:"#F59E0B", backgroundColor:"#F59E0B22", tension:.3, fill:true,
+          pointRadius: trend.map((_,i)=>outliers[i]?6:3),
+          pointBackgroundColor: trend.map((_,i)=>outliers[i]?"#EF4444":"#F59E0B") },
+        { label:"المتوسط المتحرك (3)", data: ma, borderColor:"#0891B2", borderDash:[6,4], tension:.3, pointRadius:0 }
+      ]
+    },
+    options: baseChartOptions()
+  });
+}
+
+function renderParetoChart(defects){
+  const id="chartPareto"; destroyChart(id);
+  const pareto = paretoAnalysis(defects).slice(0,12);
+  const ctx = document.getElementById(id);
+  if(!ctx || !pareto.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    data:{
+      labels: pareto.map(p=>p.type),
+      datasets:[
+        { type:"bar", label:"الكمية", data: pareto.map(p=>p.qty), backgroundColor:"#1E40AF", borderRadius:5, yAxisID:"y" },
+        { type:"line", label:"النسبة التراكمية %", data: pareto.map(p=>p.cumPct), borderColor:"#EF4444", yAxisID:"y1", tension:.25, pointRadius:3 }
+      ]
+    },
+    options: baseChartOptions({
+      scales:{
+        x:{ ticks:{ color:"#64748B", font:{family:"IBM Plex Sans Arabic",size:10.5}, maxRotation:40, minRotation:40 }, grid:{display:false} },
+        y:{ position:"left", ticks:{ color:"#64748B" }, grid:{color:"#E2E8F0"} },
+        y1:{ position:"right", min:0, max:100, ticks:{ color:"#EF4444", callback:v=>v+"%" }, grid:{display:false} }
+      }
+    })
+  });
+}
+
+function renderTop10Chart(defects){
+  const id="chartTop10"; destroyChart(id);
+  const byType = groupSum(defects, "defectType", "defectQty");
+  const top10 = Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const ctx = document.getElementById(id);
+  if(!ctx || !top10.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels: top10.map(t=>t[0]),
+      datasets:[{ label:"كمية الفاقد", data: top10.map(t=>t[1]), backgroundColor: top10.map((_,i)=>CHART_PALETTE[i%CHART_PALETTE.length]), borderRadius:6 }]
+    },
+    options: baseChartOptions({ indexAxis:"y", plugins:{ legend:{display:false} } })
+  });
+}
+
+function renderByProductChart(production){
+  const id="chartByProduct"; destroyChart(id);
+  const byProd = {};
+  production.forEach(r => { byProd[r.filterCode] = (byProd[r.filterCode]||0) + r.totalDefects; });
+  const top = Object.entries(byProd).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const ctx = document.getElementById(id);
+  if(!ctx || !top.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"bar",
+    data:{ labels: top.map(t=>t[0]), datasets:[{ label:"الفاقد", data: top.map(t=>t[1]), backgroundColor:"#0891B2", borderRadius:6 }] },
+    options: baseChartOptions({ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#64748B",font:{family:"IBM Plex Sans Arabic",size:10.5},maxRotation:30,minRotation:30},grid:{display:false}}, y:{ticks:{color:"#64748B"},grid:{color:"#E2E8F0"}} } })
+  });
+}
+
+function renderByLineChart(production){
+  const id="chartByLine"; destroyChart(id);
+  const byLine = {}, byLineProd = {};
+  production.forEach(r => {
+    byLine[r.line] = (byLine[r.line]||0) + r.totalDefects;
+    byLineProd[r.line] = (byLineProd[r.line]||0) + r.producedQty;
+  });
+  const lines = Object.keys(byLine);
+  const rates = lines.map(l => byLineProd[l]>0 ? byLine[l]/byLineProd[l]*100 : 0);
+  const ctx = document.getElementById(id);
+  if(!ctx || !lines.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"bar",
+    data:{ labels: lines, datasets:[{ label:"نسبة الفاقد %", data: rates, backgroundColor: rates.map(r=>r>=5?"#EF4444":r>=2?"#F59E0B":"#10B981"), borderRadius:6 }] },
+    options: baseChartOptions({ plugins:{legend:{display:false}} })
+  });
+}
+
+function renderByShiftChart(production){
+  const id="chartByShift"; destroyChart(id);
+  const byShift = {};
+  production.forEach(r => { byShift[r.shift] = (byShift[r.shift]||0) + r.totalDefects; });
+  const labels = Object.keys(byShift);
+  const ctx = document.getElementById(id);
+  if(!ctx || !labels.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"doughnut",
+    data:{ labels, datasets:[{ data: labels.map(l=>byShift[l]), backgroundColor: CHART_PALETTE, borderWidth:2, borderColor: getComputedStyle(document.body).getPropertyValue("--c-surface") }] },
+    options: baseChartOptions({ scales:undefined, cutout:"62%" })
+  });
+}
+
+function renderMonthlyChart(production, defects){
+  const id="chartMonthly"; destroyChart(id);
+  const trend = trendByPeriod(production, defects, "month");
+  const ctx = document.getElementById(id);
+  if(!ctx || !trend.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    data:{
+      labels: trend.map(t=>t.label),
+      datasets:[
+        { type:"bar", label:"الإنتاج", data: trend.map(t=>t.produced), backgroundColor:"#1E40AF66", borderRadius:6, yAxisID:"y" },
+        { type:"line", label:"نسبة الجودة %", data: trend.map(t=>100-t.wastePct), borderColor:"#10B981", yAxisID:"y1", tension:.3, pointRadius:3 }
+      ]
+    },
+    options: baseChartOptions({
+      scales:{
+        x:{ ticks:{ color:"#64748B", font:{family:"IBM Plex Sans Arabic",size:11} }, grid:{display:false} },
+        y:{ position:"left", ticks:{color:"#64748B"}, grid:{color:"#E2E8F0"} },
+        y1:{ position:"right", min:80, max:100, ticks:{ color:"#10B981", callback:v=>v+"%" }, grid:{display:false} }
+      }
+    })
+  });
+}
+
+function renderDefectDistChart(defects){
+  const id="chartDefectDist"; destroyChart(id);
+  const byCategory = groupSum(defects, "defectCategory", "defectQty");
+  const labels = Object.keys(byCategory);
+  const ctx = document.getElementById(id);
+  if(!ctx || !labels.length) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"pie",
+    data:{ labels, datasets:[{ data: labels.map(l=>byCategory[l]), backgroundColor: CHART_PALETTE, borderWidth:2, borderColor: getComputedStyle(document.body).getPropertyValue("--c-surface") }] },
+    options: baseChartOptions({ scales:undefined })
+  });
+}
+
+function renderRiskChart(production){
+  const id="chartRisk"; destroyChart(id);
+  const byDay = {};
+  production.forEach(r => {
+    const k = fmtDate(r.date);
+    if(!byDay[k]) byDay[k] = { produced:0, waste:0 };
+    byDay[k].produced += r.producedQty;
+    byDay[k].waste += r.totalDefects;
+  });
+  let low=0, med=0, high=0;
+  Object.values(byDay).forEach(d => {
+    const rate = d.produced>0 ? d.waste/d.produced*100 : 0;
+    if(rate >= 5) high++; else if(rate >= 2) med++; else low++;
+  });
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels:["منخفض الخطورة (<2%)","متوسط الخطورة (2-5%)","مرتفع الخطورة (≥5%)"],
+      datasets:[{ label:"عدد الأيام", data:[low,med,high], backgroundColor:["#10B981","#F59E0B","#EF4444"], borderRadius:8 }]
+    },
+    options: baseChartOptions({ plugins:{legend:{display:false}} })
+  });
+}
+
+function renderYieldGauge(production, defects){
+  const id="chartYieldGauge"; destroyChart(id);
+  const kpi = computeKPIs(production, defects);
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  chartInstances[id] = new Chart(ctx, {
+    type:"doughnut",
+    data:{
+      labels:["إنتاج سليم (Yield)","فاقد"],
+      datasets:[{ data:[kpi.yieldPct, kpi.wastePct], backgroundColor:["#10B981","#EF4444"], borderWidth:0 }]
+    },
+    options: baseChartOptions({
+      scales:undefined, cutout:"75%",
+      plugins:{
+        legend:{ position:"bottom", labels:{ color:"#64748B", font:{family:"IBM Plex Sans Arabic",size:12} } },
+        tooltip:{ callbacks:{ label:(c)=>`${c.label}: ${c.raw.toFixed(2)}%` } }
+      }
+    }),
+    plugins:[{
+      id:"centerText",
+      afterDraw(chart){
+        const {ctx, chartArea:{width,height,top,left}} = chart;
+        ctx.save();
+        ctx.font = "800 26px Tajawal";
+        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--c-text").trim() || "#0F172A";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(kpi.yieldPct.toFixed(1)+"%", left+width/2, top+height/2 - 6);
+        ctx.font = "500 11px 'IBM Plex Sans Arabic'";
+        ctx.fillStyle = "#64748B";
+        ctx.fillText("نسبة الجودة", left+width/2, top+height/2 + 16);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+/* =========================================================================
+   RENDER: EXECUTIVE INSIGHTS PANEL
+   ========================================================================= */
+function renderInsightsPanel(){
+  const { production, defects } = getFilteredData();
+  const kpi = computeKPIs(production, defects);
+  const insights = generateInsights(production, defects, kpi);
+  if(!insights.length) return "";
+
+  const toneStyles = {
+    danger:{bg:"rgba(239,68,68,.08)", border:"rgba(239,68,68,.25)", icColor:"var(--c-danger)"},
+    warning:{bg:"rgba(245,158,11,.08)", border:"rgba(245,158,11,.25)", icColor:"var(--c-warning)"},
+    success:{bg:"rgba(16,185,129,.08)", border:"rgba(16,185,129,.25)", icColor:"var(--c-success)"}
+  };
+
+  return `
+  <section class="card p-5 fade-up" style="background:linear-gradient(135deg, var(--c-surface), var(--c-surface-2));">
+    <div class="flex items-center gap-2 mb-4 font-display font-bold text-sm" style="color:var(--c-text)">
+      ${icon("target",16)} الرؤى التنفيذية الذكية
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      ${insights.map(ins => {
+        const t = toneStyles[ins.tone] || toneStyles.warning;
+        return `
+        <div class="rounded-2xl p-4 flex gap-3" style="background:${t.bg}; border:1px solid ${t.border};">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:${t.icColor}1a;color:${t.icColor}">
+            ${icon(ins.icon,16)}
+          </div>
+          <div>
+            <div class="text-sm font-bold mb-1" style="color:var(--c-text)">${ins.title}</div>
+            <div class="text-[12.5px] leading-relaxed" style="color:var(--c-text-muted)">${ins.text}</div>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+/* =========================================================================
+   RENDER: INTERACTIVE TABLE
+   ========================================================================= */
+const TABLE_COLS = [
+  { key:"date", label:"التاريخ", fmt: r => fmtDate(r.date) },
+  { key:"line", label:"الخط" },
+  { key:"filterCode", label:"كود الفلتر" },
+  { key:"productType", label:"نوع المنتج" },
+  { key:"brand", label:"الماركة" },
+  { key:"producedQty", label:"الكمية المنتجة", fmt: r => fmtInt(r.producedQty), numeric:true },
+  { key:"totalDefects", label:"الفاقد", fmt: r => fmtInt(r.totalDefects), numeric:true },
+  { key:"wastePct", label:"نسبة الفاقد", fmt: r => fmtPct(r.wastePct), numeric:true },
+  { key:"shift", label:"الوردية" },
+  { key:"supervisor", label:"المشرف" },
+  { key:"riskLevel", label:"مستوى الخطورة", fmt: r => riskBadge(r.riskLevel) }
+];
+
+function riskBadge(level){
+  const cls = level==="مرتفع"?"badge-danger":level==="متوسط"?"badge-warning":"badge-success";
+  return `<span class="badge ${cls}">${level}</span>`;
+}
+
+function getTableRows(){
+  const { production } = getFilteredData();
+  let rows = [...production];
+  if(AppState.search){
+    const q = AppState.search.toLowerCase();
+    rows = rows.filter(r => [r.line,r.filterCode,r.productType,r.brand,r.shift,r.supervisor].some(v => String(v).toLowerCase().includes(q)));
+  }
+  if(AppState.sort.key){
+    const { key, dir } = AppState.sort;
+    rows.sort((a,b) => {
+      let va=a[key], vb=b[key];
+      if(va instanceof Date) { va=va.getTime(); vb=vb.getTime(); }
+      if(typeof va === "string") return va.localeCompare(vb,"ar") * dir;
+      return (va-vb) * dir;
+    });
+  } else {
+    rows.sort((a,b)=>b.date-a.date);
+  }
+  return rows;
+}
+
+function renderTableSection(){
+  const allRows = getTableRows();
+  const totalPages = Math.max(1, Math.ceil(allRows.length / AppState.pageSize));
+  AppState.page = Math.min(AppState.page, totalPages);
+  const start = (AppState.page-1)*AppState.pageSize;
+  const pageRows = allRows.slice(start, start+AppState.pageSize);
+
+  return `
+  <section class="card p-4 fade-up">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="flex items-center gap-2 font-display font-bold text-sm" style="color:var(--c-text)">
+        ${icon("layers",16)} سجل بيانات الإنتاج والفاقد التفصيلي
+        <span class="badge badge-info">${fmtInt(allRows.length)} سجل</span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="relative">
+          <span class="absolute right-3 top-1/2 -translate-y-1/2" style="color:var(--c-text-faint)">${icon("search",14)}</span>
+          <input id="tableSearch" type="text" placeholder="بحث في السجل..." value="${AppState.search}"
+            class="chip-select pr-9" style="padding-right:34px;min-width:180px;background-position:left 8px center">
+        </div>
+        <button onclick="exportTableCSV()" class="btn btn-ghost">${icon("download",14)} CSV</button>
+        <button onclick="exportExcel()" class="btn btn-ghost">${icon("download",14)} Excel</button>
+        <button onclick="exportTablePDF()" class="btn btn-ghost">${icon("download",14)} PDF</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto scrollbar-thin rounded-xl border" style="border-color:var(--c-border)">
+      <table class="dt">
+        <thead>
+          <tr>
+            ${TABLE_COLS.map(c => `<th onclick="sortTable('${c.key}')">
+              ${c.label} ${AppState.sort.key===c.key ? (AppState.sort.dir===1?"▲":"▼") : ""}
+            </th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${pageRows.length ? pageRows.map(r => `
+            <tr>
+              ${TABLE_COLS.map(c => `<td>${c.fmt ? c.fmt(r) : r[c.key]}</td>`).join("")}
+            </tr>`).join("") : `<tr><td colspan="${TABLE_COLS.length}" class="text-center py-8" style="color:var(--c-text-faint)">لا توجد سجلات مطابقة للفلاتر الحالية</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between mt-4 text-xs" style="color:var(--c-text-muted)">
+      <div>عرض ${pageRows.length ? start+1 : 0}–${start+pageRows.length} من ${fmtInt(allRows.length)}</div>
+      <div class="flex items-center gap-1">
+        <button onclick="changePage(-1)" class="btn btn-ghost btn-icon" ${AppState.page<=1?'disabled style="opacity:.4"':''}>${icon("chevron_down",14,"rotate-90")}</button>
+        <span class="px-2 font-mono">${AppState.page} / ${totalPages}</span>
+        <button onclick="changePage(1)" class="btn btn-ghost btn-icon" ${AppState.page>=totalPages?'disabled style="opacity:.4"':''}>${icon("chevron_down",14,"-rotate-90")}</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+function attachTableHandlers(){
+  const search = document.getElementById("tableSearch");
+  if(search){
+    search.addEventListener("input", (e) => {
+      AppState.search = e.target.value;
+      AppState.page = 1;
+      renderApp();
+      document.getElementById("tableSearch").focus();
+    });
+  }
+}
+
+function sortTable(key){
+  if(AppState.sort.key === key){ AppState.sort.dir *= -1; }
+  else { AppState.sort.key = key; AppState.sort.dir = 1; }
+  renderApp();
+}
+function changePage(delta){ AppState.page += delta; renderApp(); }
+
+/* =========================================================================
+   EXPORTS
+   ========================================================================= */
+function getExportRows(){
+  return getTableRows().map(r => ({
+    "التاريخ": fmtDate(r.date), "الخط": r.line, "كود الفلتر": r.filterCode,
+    "نوع المنتج": r.productType, "الماركة": r.brand, "الكمية المنتجة": r.producedQty,
+    "الفاقد": r.totalDefects, "نسبة الفاقد %": +r.wastePct.toFixed(2), "الوردية": r.shift,
+    "المشرف": r.supervisor, "مستوى الخطورة": r.riskLevel
+  }));
+}
+
+function exportTableCSV(){
+  const rows = getExportRows();
+  if(!rows.length) return;
+  const csv = Papa.unparse(rows);
+  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8;"});
+  downloadBlob(blob, `filtrac_waste_report_${fmtDate(new Date())}.csv`);
+}
+
+function exportExcel(){
+  const rows = getExportRows();
+  if(!rows.length) return;
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Production_Waste");
+  XLSX.writeFile(wb, `filtrac_waste_report_${fmtDate(new Date())}.xlsx`);
+}
+
+function exportTablePDF(){
+  const rows = getExportRows();
+  if(!rows.length) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:"landscape" });
+  const headers = Object.keys(rows[0]);
+  doc.autoTable({
+    head:[headers],
+    body: rows.map(r => headers.map(h=>String(r[h]))),
+    styles:{ fontSize:7 },
+    headStyles:{ fillColor:[15,23,42] }
+  });
+  doc.save(`filtrac_waste_report_${fmtDate(new Date())}.pdf`);
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* =========================================================================
+   THEME & UI UTILITIES
+   ========================================================================= */
+function toggleTheme(){
+  AppState.theme = AppState.theme === "dark" ? "light" : "dark";
+  document.body.setAttribute("data-theme", AppState.theme);
+  renderApp();
+}
+
+function toggleFullscreen(){
+  if(!document.fullscreenElement){ document.documentElement.requestFullscreen?.(); }
+  else { document.exitFullscreen?.(); }
+}
+
+/* =========================================================================
+   BOOTSTRAP
+   ========================================================================= */
+async function bootstrapApp(){
+  AppState.isLive = false;
+  renderApp();
+  try{
+    await loadAllData();
+    renderApp();
+  }catch(err){
+    console.error(err);
+    renderErrorState(err.message || "حدث خطأ غير متوقع أثناء تحميل البيانات من الشيت");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", bootstrapApp);
+</script>
+
+</body>
+</html>
