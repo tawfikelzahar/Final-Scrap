@@ -474,20 +474,28 @@ function deriveDateParts(d){
 async function loadAllData(){
   if(!SHEET_ID) throw new Error("لم يتم العثور على معرف الشيت في الرابط المُدخل");
 
+  AppState.debugLog = [];
+  const log = (msg) => { AppState.debugLog.push(msg); console.log("[Filtrac Dashboard]", msg); };
+
   let tabResults = [];
 
   // ---- Attempt 1: fetch by the known, exact tab names (most reliable) ----
   for(const [role, tabName] of Object.entries(SHEET_TAB_NAMES)){
     try{
       const { headers, rows } = await fetchTabByName(SHEET_ID, tabName);
+      log(`قراءة التبويب "${tabName}": ${headers.length} عمود، ${rows.length} صف خام. الأعمدة: [${headers.join(" | ")}]`);
       if(headers.length) tabResults.push({ gid:null, name:tabName, headers, rows });
-    }catch(e){ /* this named tab failed to resolve, fall through to gid probing below */ }
+    }catch(e){
+      log(`فشل قراءة التبويب "${tabName}": ${e.message}`);
+    }
   }
 
   // ---- Attempt 2: fallback — probe gids 0-11 in case tab names changed ----
   if(!tabResults.length){
+    log("لم يُقرأ أي تبويب بالاسم — يتم تجربة الاحتياطي عبر gid 0-11");
     const probed = await probeAllTabs(SHEET_ID);
     tabResults = probed.map(p => ({ gid:p.gid, name:`Sheet${p.gid}`, headers:p.headers, rows:p.rows }));
+    log(`الاحتياطي وجد ${tabResults.length} تبويب`);
   }
   if(!tabResults.length){
     throw new Error(`تعذرت قراءة التبويبات "${SHEET_TAB_NAMES.production}" و"${SHEET_TAB_NAMES.defects}" — تأكد من اسم التبويب بالضبط كما يظهر على اللسان (Tab) في أسفل الشيت، ومن أن صلاحية المشاركة Anyone with link / Viewer`);
@@ -500,17 +508,22 @@ async function loadAllData(){
   const defectTabs = [];
   tabResults.forEach(t => {
     const classified = classifyTab(t.headers, t.rows);
+    log(`تصنيف التبويب "${t.name}": ${classified.kind} (صفوف ممتلئة: ${classified.rows.length}). خريطة الأعمدة المكتشفة: ${JSON.stringify(classified.map)}`);
     if(classified.kind === "production") productionTabs.push({ ...t, ...classified });
     else if(classified.kind === "defects") defectTabs.push({ ...t, ...classified });
   });
 
+  if(!productionTabs.length) log("⚠️ لم يتم العثور على أي تبويب يُصنَّف كـ 'production' — تحقق من خريطة الأعمدة أعلاه");
+  if(!defectTabs.length) log("⚠️ لم يتم العثور على أي تبويب يُصنَّف كـ 'defects' — تحقق من خريطة الأعمدة أعلاه");
+
   // ---- Normalize PRODUCTION rows (merge all detected production tabs) ----
   const production = [];
+  let prodSkippedNoDate = 0;
   productionTabs.forEach(t => {
     t.rows.forEach(r => {
       const get = f => t.map[f] ? r[t.map[f]] : null;
       const d = parseSheetDate(get("date"));
-      if(!d) return; // skip rows without a valid date (e.g. trailing blank rows)
+      if(!d){ prodSkippedNoDate++; return; } // skip rows without a valid date (e.g. trailing blank rows)
       const qty = toNumber(get("producedQty"));
       const dp = deriveDateParts(d);
       production.push({
@@ -526,15 +539,18 @@ async function loadAllData(){
       });
     });
   });
+  log(`صفوف الإنتاج بعد التطبيع: ${production.length} (تم تجاوز ${prodSkippedNoDate} صف بدون تاريخ صالح)`);
+  if(production.length) log(`أول 3 مفاتيح إنتاج: ${production.slice(0,3).map(p=>p.key).join(" , ")}`);
 
   // ---- Normalize DEFECT rows (merge all detected defect tabs) ----
   const defects = [];
+  let defSkipped = 0;
   defectTabs.forEach(t => {
     t.rows.forEach(r => {
       const get = f => t.map[f] ? r[t.map[f]] : null;
       const d = parseSheetDate(get("date"));
       const qty = toNumber(get("defectQty"));
-      if(!d || qty <= 0) return; // skip blank trailing rows / zero-defect placeholder rows
+      if(!d || qty <= 0){ defSkipped++; return; } // skip blank trailing rows / zero-defect placeholder rows
       const dp = deriveDateParts(d);
       defects.push({
         date:d, ...dp,
@@ -550,6 +566,8 @@ async function loadAllData(){
       });
     });
   });
+  log(`صفوف العيوب بعد التطبيع: ${defects.length} (تم تجاوز ${defSkipped} صف بدون تاريخ/كمية صالحة)`);
+  if(defects.length) log(`أول 3 مفاتيح عيوب: ${defects.slice(0,3).map(d=>d.key).join(" , ")}`);
 
   // ---- Aggregate defects per key for joining onto production rows ----
   const defectAggByKey = {};
@@ -557,6 +575,7 @@ async function loadAllData(){
     if(!defectAggByKey[d.key]) defectAggByKey[d.key] = 0;
     defectAggByKey[d.key] += d.defectQty;
   });
+  log(`عدد المفاتيح الفريدة في تجميع العيوب: ${Object.keys(defectAggByKey).length}`);
 
   const joined = production.map(p => {
     const totalDefects = defectAggByKey[p.key] || 0;
@@ -568,6 +587,15 @@ async function loadAllData(){
     else if(wastePct >= 2) riskLevel = "متوسط";
     return { ...p, totalDefects, yieldQty, wastePct, yieldPct, riskLevel };
   });
+
+  const matchedCount = joined.filter(j => j.totalDefects > 0).length;
+  log(`صفوف إنتاج تم ربطها بنجاح بفاقد > 0: ${matchedCount} من ${joined.length}`);
+  if(matchedCount === 0 && production.length && defects.length){
+    log("⚠️ لا يوجد أي تطابق بين مفاتيح الإنتاج ومفاتيح العيوب رغم وجود بيانات في الاثنين — سيتم عرض أمثلة للمقارنة اليدوية");
+    log(`نموذج مفتاح إنتاج: "${production[0].key}"`);
+    log(`نموذج مفتاح عيب: "${defects[0].key}"`);
+    log(`تطابق حرفي؟ ${production[0].key === defects[0].key}`);
+  }
 
   AppState.rawProduction = production;
   AppState.rawDefects = defects;
@@ -916,6 +944,7 @@ function renderHeader(){
         <button data-tip="تصدير Excel" onclick="exportExcel()" class="btn btn-ghost btn-icon hide-mobile">${icon("download",16)}</button>
         <button data-tip="الوضع الليلي" onclick="toggleTheme()" id="themeToggleBtn" class="btn btn-ghost btn-icon">${icon(AppState.theme==="dark"?"sun":"moon",16)}</button>
         <button data-tip="ملء الشاشة" onclick="toggleFullscreen()" class="btn btn-ghost btn-icon hide-mobile">${icon("expand",16)}</button>
+        <button data-tip="تشخيص الاتصال بالبيانات" onclick="showDiagnostics()" class="btn btn-ghost btn-icon" style="color:var(--c-accent)">${icon("alert",16)}</button>
       </div>
     </div>
   </header>`;
@@ -1688,6 +1717,28 @@ function toggleTheme(){
 function toggleFullscreen(){
   if(!document.fullscreenElement){ document.documentElement.requestFullscreen?.(); }
   else { document.exitFullscreen?.(); }
+}
+
+function showDiagnostics(){
+  const log = AppState.debugLog || ["لا يوجد سجل تشخيص — لم يتم تحميل البيانات بعد."];
+  const existing = document.getElementById("diagModal");
+  if(existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "diagModal";
+  modal.className = "modal-overlay";
+  modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="card p-5" style="max-width:720px;width:100%;max-height:80vh;overflow-y:auto;">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-display font-bold text-sm" style="color:var(--c-text)">سجل تشخيص الاتصال بالبيانات</div>
+        <button onclick="document.getElementById('diagModal').remove()" class="btn btn-ghost btn-icon">${icon("x",16)}</button>
+      </div>
+      <div class="text-[11px] mb-3" style="color:var(--c-text-muted)">صوّر هذه القائمة وابعتها لمراجعة سبب أي خلل في قراءة أو ربط البيانات</div>
+      <div class="font-mono text-[11.5px] leading-relaxed space-y-1.5" style="color:var(--c-text)" dir="ltr">
+        ${log.map((l,i) => `<div class="pb-1.5 border-b" style="border-color:var(--c-border)">${i+1}. ${l.replace(/</g,"&lt;")}</div>`).join("")}
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
 }
 
 /* =========================================================================
